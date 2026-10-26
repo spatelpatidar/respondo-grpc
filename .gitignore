@@ -1,0 +1,8 @@
+/.bundle/
+/coverage/
+/pkg/
+*.gem
+/example/
+/spec/examples.txt
+/spec/respondo_grpc_test.txt
+/spec/integration/
