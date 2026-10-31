@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package respondo.v1;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/struct.proto";
+
+// The response envelope shared by the Respondo gems, as a protobuf message.
+//
+//   respondo (JSON)      { success, message, data, errors, meta }
+//   respondo-graphql     { data, errors, extensions }
+//   respondo-grpc        this message
+//
+// Use it as the return type of any rpc:
+//
+//   import "respondo/v1/response.proto";
+//
+//   service UserService {
+//     rpc GetUser(GetUserRequest) returns (respondo.v1.Response);
+//   }
+message Response {
+  bool success = 1;
+  string message = 2;
+
+  // JSON-like payload: a hash, array, scalar or null. Built from ActiveRecord
+  // records, hashes, arrays, ...
+  google.protobuf.Value data = 3;
+
+  // Typed payload. Set instead of `data` when the server passes a protobuf
+  // message, so the client can unpack it into a real class.
+  google.protobuf.Any payload = 4;
+
+  // Field-level errors, e.g. { field: "email", messages: ["is invalid"] }.
+  repeated FieldError errors = 5;
+
+  Meta meta = 6;
+}
+
+message FieldError {
+  string field = 1;
+  repeated string messages = 2;
+}
+
+message Meta {
+  // Copied from request metadata when config.include_request_id is on.
+  string request_id = 1;
+
+  // ISO 8601, UTC.
+  string timestamp = 2;
+
+  // HTTP-style code the helper stands for (200, 404, 422, ...). Same numbers
+  // as the respondo / respondo-graphql gems, so envelopes line up across all three.
+  int32 code = 3;
+
+  // Matching status name, e.g. "not_found".
+  string status = 4;
+
+  // gRPC status code (0 = OK, 5 = NOT_FOUND, ...). Always set on failures; this
+  // is the code to read when config.always_ok sends failures as a normal reply.
+  int32 grpc_code = 5;
+
+  // Custom machine-readable code, e.g. "AUTH_EXPIRED". Only set when supplied.
+  string error_code = 6;
+
+  Pagination pagination = 7;
+
+  // config.default_meta plus any extra keys passed through meta:.
+  google.protobuf.Struct extra = 8;
+}
+
+message Pagination {
+  int32 current_page = 1;
+  int32 per_page = 2;
+  int32 total_pages = 3;
+  int32 total_count = 4;
+  optional int32 next_page = 5;
+  optional int32 prev_page = 6;
+}

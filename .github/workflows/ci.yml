@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel an older run of the same branch/PR when a new commit is pushed
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: CI only needs to read the code
+permissions:
+  contents: read
+
+jobs:
+  linux-ruby-3-2:
+    name: Linux · Ruby 3.2
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/rspec
+        with:
+          ruby-version: "3.2"
+
+  linux-ruby-3-3:
+    name: Linux · Ruby 3.3
+    needs: linux-ruby-3-2
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/rspec
+        with:
+          ruby-version: "3.3"
+
+  linux-ruby-3-4:
+    name: Linux · Ruby 3.4
+    needs: linux-ruby-3-3
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/rspec
+        with:
+          ruby-version: "3.4"
+
+  macos-ruby-3-4:
+    name: macOS · Ruby 3.4
+    needs: linux-ruby-3-4
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/rspec
+        with:
+          ruby-version: "3.4"
+
+  build:
+    name: Build gem
+    needs: macos-ruby-3-4
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@824c0e29fdfc7d689c191c27acc969d2d04b7dd8 # v1.331.0
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+
+      - name: Build gem (checks the gemspec and file list)
+        run: |
+          gem build respondo-grpc.gemspec
+          ruby -rrubygems/package -e 'puts Gem::Package.new(Dir["*.gem"].first).contents.sort'
+
+  # One stable check name to mark as "required" in the ruleset
+  ci-passed:
+    name: CI passed
+    if: always()
+    needs:
+      - linux-ruby-3-2
+      - linux-ruby-3-3
+      - linux-ruby-3-4
+      - macos-ruby-3-4
+      - build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any job failed, was skipped or was cancelled
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        run: |
+          echo "One or more jobs did not succeed"
+          exit 1
+
+      - name: All jobs passed
+        run: echo "All jobs passed"
