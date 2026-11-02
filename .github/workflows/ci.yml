@@ -16,6 +16,7 @@ permissions:
   contents: read
 
 jobs:
+  # ── Linux: every Ruby version, one after another ──────────────────────────
   linux-ruby-3-2:
     name: Linux · Ruby 3.2
     runs-on: ubuntu-latest
@@ -45,9 +46,20 @@ jobs:
         with:
           ruby-version: "3.4"
 
+  # ── Windows and macOS: start after Linux passes, run side by side ─────────
+  windows-ruby-3-4:
+    name: Windows · Ruby 3.4
+    needs: linux-ruby-3-4
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/rspec
+        with:
+          ruby-version: "3.4"
+
   macos-ruby-3-4:
     name: macOS · Ruby 3.4
-    needs: linux-ruby-3-4
+    needs: windows-ruby-3-4
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -55,9 +67,10 @@ jobs:
         with:
           ruby-version: "3.4"
 
+  # ── Build, analysis, final gate ───────────────────────────────────────────
   build:
     name: Build gem
-    needs: macos-ruby-3-4
+    needs: [windows-ruby-3-4, macos-ruby-3-4]   # starts only after every spec job passes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -73,6 +86,31 @@ jobs:
           gem build respondo-grpc.gemspec
           ruby -rrubygems/package -e 'puts Gem::Package.new(Dir["*.gem"].first).contents.sort'
 
+  sonar:
+    name: SonarQube analysis
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@824c0e29fdfc7d689c191c27acc969d2d04b7dd8 # v1.331.0
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+
+      - name: Run specs to produce coverage
+        run: bundle exec rspec --format progress
+
+      - name: SonarQube scan
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: -Dsonar.qualitygate.wait=true
+
   # One stable check name to mark as "required" in the ruleset
   ci-passed:
     name: CI passed
@@ -81,8 +119,10 @@ jobs:
       - linux-ruby-3-2
       - linux-ruby-3-3
       - linux-ruby-3-4
+      - windows-ruby-3-4
       - macos-ruby-3-4
       - build
+      - sonar
     runs-on: ubuntu-latest
     steps:
       - name: Fail if any job failed, was skipped or was cancelled
