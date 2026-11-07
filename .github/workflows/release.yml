@@ -203,23 +203,23 @@ jobs:
       - name: Check if this version is already in GitHub Packages
         id: check
         run: |
-          gem_version="$(ruby -e "s = Gem::Specification.load('respondo-graphql.gemspec') or abort('cannot load gemspec'); puts s.version.to_s")"
+          gem_version="$(ruby -e "s = Gem::Specification.load('respondo-grpc.gemspec') or abort('cannot load gemspec'); puts s.version.to_s")"
           echo "gem_version=${gem_version}" >> "$GITHUB_OUTPUT"
 
           # Package not created yet -> API returns 404 -> empty list -> publish
-          existing="$(gh api --paginate "users/${OWNER}/packages/rubygems/respondo-graphql/versions" --jq '.[].name' 2>/dev/null || true)"
+          existing="$(gh api --paginate "users/${OWNER}/packages/rubygems/respondo-grpc/versions" --jq '.[].name' 2>/dev/null || true)"
 
           if printf '%s\n' "${existing}" | grep -Fxq "${gem_version}"; then
-            echo "respondo-graphql ${gem_version} is already in GitHub Packages: skipping"
+            echo "respondo-grpc ${gem_version} is already in GitHub Packages: skipping"
             echo "publish=false" >> "$GITHUB_OUTPUT"
           else
-            echo "respondo-graphql ${gem_version} is not in GitHub Packages yet: publishing"
+            echo "respondo-grpc ${gem_version} is not in GitHub Packages yet: publishing"
             echo "publish=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build the gem
         if: steps.check.outputs.publish == 'true'
-        run: gem build respondo-graphql.gemspec
+        run: gem build respondo-grpc.gemspec
 
       - name: Publish gem to GitHub Packages
         if: steps.check.outputs.publish == 'true'
@@ -230,7 +230,7 @@ jobs:
           printf -- "---\n:github: Bearer %s\n" "${GH_TOKEN}" > ~/.gem/credentials
           chmod 0600 ~/.gem/credentials
 
-          gem push "respondo-graphql-${GEM_VERSION}.gem" \
+          gem push "respondo-grpc-${GEM_VERSION}.gem" \
             --key github \
             --host "https://rubygems.pkg.github.com/${OWNER}"
 
